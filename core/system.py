@@ -1,6 +1,7 @@
 from typing import List
 from .process import Process
 from .resource import Resource
+from .bankers import BankersAlgorithm
 
 class System:
     def __init__(self, resource_totals:List[int]):
@@ -36,16 +37,37 @@ class System:
                 process.status = 'waiting'
                 return False
             
-        # Step 3: Tentatively allocate
-        for i in range(len(request)):
-            self.resources[i].allocate(request[i])
-            self.available[i] -= request[i]
-            process.allocation[i] += request[i]
-            process.need[i] -= request[i]
+         # Step 3: Check safety with Banker's Algorithm
+        banker = BankersAlgorithm(
+            available=self.available.copy(),
+            max_need=[p.max for p in self.processes],
+            allocated=[p.allocation for p in self.processes]
+        )
         
+        if not banker.request_resources(pid, request):
+            process.status = "waiting"
+            return False
+            
+        # Step 4: ACTUALLY allocate resources if safe
+        for j in range(len(request)):
+            self.resources[j].allocate(request[j])
+            process.allocation[j] += request[j]
+            process.need[j] -= request[j]
+            self.available[j] -= request[j]
+            
         #finally the process is ready for excution
-        process.status = 'ready'
+        process.status = "ready"
         return True
+    
+    def release_resources(self, pid: int):
+        """Release all resources held by a process."""
+        process = self.processes[pid]
+        for j in range(len(process.allocation)):
+            self.resources[j].release(process.allocation[j])
+            self.available[j] += process.allocation[j]
+            process.allocation[j] = 0
+            process.need[j] = process.max[j]  # Reset need to max
+        process.status = "terminated"
     
     def print_state(self):
         print("\n=== System State ===")
