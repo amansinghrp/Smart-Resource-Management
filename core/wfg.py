@@ -1,5 +1,5 @@
 from typing import Dict, List, Set
-from system import System
+from .system import System
 
 class WFG:
     def __init__(self, system: System):

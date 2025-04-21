@@ -1,5 +1,5 @@
-from system import System
-from wfg import WFG
+from core.system import System
+from core.wfg import WFG
 
 # Initialize system
 sys = System([3, 2])  # Example: 2 resource types
