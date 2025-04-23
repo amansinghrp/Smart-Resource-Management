@@ -1,7 +1,7 @@
 from typing import List
 from .process import Process
 from .resource import Resource
-from .bankers import BankersAlgorithm
+from .banker import BankersAlgorithm
 
 class System:
     def __init__(self, resource_totals:List[int]):
