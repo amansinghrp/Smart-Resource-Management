@@ -1,86 +1,96 @@
-# core/bankers.py
-class BankersAlgorithm:
-    def __init__(self, available: list[int], max_need: list[list[int]], allocated: list[list[int]]):
+from typing import List
+
+class Banker:
+    def __init__(self, available: List[int], max_need: List[List[int]], allocated: List[List[int]]):
         """
-        Initialize Banker's Algorithm with system state.
+        Initializes the Banker's Algorithm for managing resource requests.
         
         Args:
-            available: List of available instances per resource type (e.g., [3, 1, 2])
-            max_need: 2D list of maximum needs per process (e.g., [[7,4,3], [3,2,2]])
-            allocated: 2D list of currently allocated resources per process
+            available: A list of available instances of each resource.
+            max_need: A 2D list where each sublist represents the maximum resource need per process.
+            allocated: A 2D list representing the resources allocated to each process.
         """
-        self.available = available.copy()
-        self.max = [row.copy() for row in max_need]
-        self.allocation = [row.copy() for row in allocated]
-        
-        # Calculate need matrix (max - allocated)
-        self.need = [
-            [self.max[i][j] - self.allocation[i][j] 
-             for j in range(len(available))]  # Per-resource
-            for i in range(len(max_need))     # Per-process
-        ]
-            
-
-    def is_safe(self) -> (bool, list[int]):
+        self.available = available
+        self.max_need = max_need
+        self.allocated = allocated
+        self.process_count = len(max_need)
+        self.resource_count = len(available)
+    
+    def request_resources(self, pid: int, request: List[int]) -> bool:
         """
-        Check if system is in a safe state.
-        
-        Returns:
-            (True, safe_sequence) if safe, (False, []) otherwise
-        """
-        work = self.available.copy()
-        finish = [False] * len(self.max)
-        safe_sequence = []
-        
-        # Try to find a complete safe sequence
-        for _ in range(len(self.max)):  # Max N iterations (N = num processes)
-            found = False
-            for i in range(len(self.max)):
-                if not finish[i] and all(self.need[i][j] <= work[j] for j in range(len(work))):
-                    work = [work[j] + self.allocation[i][j] for j in range(len(work))]
-                    finish[i] = True
-                    safe_sequence.append(i)
-                    found = True
-                    break
-            
-            if not found:
-                return (False, [])  # Deadlock detected → empty sequence
-        
-        return (True, safe_sequence)  # All processes finished
-
-    def request_resources(self, pid: int, request: list[int]) -> bool:
-        """
-        Check if granting a request leads to a safe state.
+        Attempts to allocate requested resources to a process using the Banker's algorithm.
         
         Args:
-            pid: Process ID making the request
-            request: List of requested resources per type
-            
+            pid: Process ID requesting resources.
+            request: List of requested resources by the process.
+        
         Returns:
-            True if request can be granted safely
+            bool: True if the request can be safely granted, False otherwise.
         """
-        # Step 1: Verify request <= need
-        if any(request[j] > self.need[pid][j] for j in range(len(request))):
-            return False
-            
-        # Step 2: Verify request <= available
-        if any(request[j] > self.available[j] for j in range(len(request))):
-            return False
-            
-        # Step 3: Tentatively allocate
-        for j in range(len(request)):
-            self.available[j] -= request[j]
-            self.allocation[pid][j] += request[j]
-            self.need[pid][j] -= request[j]
-            
-        # Step 4: Check safety
-        is_safe, _ = self.is_safe()
         
-        # Step 5: Rollback if unsafe
-        if not is_safe:
-            for j in range(len(request)):
-                self.available[j] += request[j]
-                self.allocation[pid][j] -= request[j]
-                self.need[pid][j] += request[j]
+        # Step 1: Check if the request is less than or equal to the process's maximum need
+        for i in range(self.resource_count):
+            if request[i] > self.max_need[pid][i]:
+                return False
         
-        return is_safe
+        # Step 2: Check if the request can be satisfied by the available resources
+        for i in range(self.resource_count):
+            if request[i] > self.available[i]:
+                return False
+        
+        # Step 3: Pretend to allocate the requested resources
+        # Temporarily modify available and allocation
+        temp_available = self.available[:]
+        temp_allocated = [row[:] for row in self.allocated]  # Create a deep copy
+        temp_available = [temp_available[i] - request[i] for i in range(self.resource_count)]
+        temp_allocated[pid] = [temp_allocated[pid][i] + request[i] for i in range(self.resource_count)]
+        
+        # Step 4: Check if the system is in a safe state after the allocation
+        if not self.is_safe_state(temp_available, temp_allocated):
+            return False
+        
+        # Step 5: If it's safe, actually allocate the resources
+        self.available = temp_available
+        self.allocated = temp_allocated
+        
+        return True
+    
+    def is_safe_state(self, available: List[int], allocated: List[List[int]]) -> bool:
+        """
+        Checks if the system is in a safe state by simulating resource allocation.
+        
+        Args:
+            available: A list of available resources after allocation.
+            allocated: A 2D list representing the current allocation of resources to processes.
+        
+        Returns:
+            bool: True if the system is in a safe state, False otherwise.
+        """
+        
+        work = available[:]
+        finish = [False] * self.process_count
+        
+        while True:
+            # Find a process that can finish
+            progress_made = False
+            for i in range(self.process_count):
+                if not finish[i]:
+                    # Check if the process's remaining need can be satisfied with available resources
+                    can_finish = True
+                    for j in range(self.resource_count):
+                        if self.max_need[i][j] - allocated[i][j] > work[j]:
+                            can_finish = False
+                            break
+                    
+                    if can_finish:
+                        # Pretend this process finishes and releases its resources
+                        work = [work[j] + allocated[i][j] for j in range(self.resource_count)]
+                        finish[i] = True
+                        progress_made = True
+                        break
+            
+            if not progress_made:
+                break
+        
+        # If all processes can finish, the system is in a safe state
+        return all(finish)
