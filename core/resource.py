@@ -24,5 +24,6 @@ class Resource:
         """
         self.allocated -= instances
         self.available += instances
+        
     def __str__(self):
         return f'R{self.rid} (Total: {self.total}, Available: {self.available})'

@@ -1,4 +1,5 @@
 from typing import List
+
 class Banker:
     def __init__(self, available: List[int], max_need: List[List[int]], allocated: List[List[int]]):
         """
