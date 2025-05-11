@@ -23,7 +23,6 @@ class Process:
         Request resources for the process.
         """
         self.requested = resources.copy()
-
     def __str__(self):
         """For printing the process"""
         return f"P{self.pid} | Alloc: {self.allocation} | Need: {self.need} | Req: {self.requested}"
