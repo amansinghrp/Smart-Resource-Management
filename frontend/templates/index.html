@@ -3,100 +3,106 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Resource Manager</title>
+  <title>Smart Resource Management</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f9f9f9;
-      padding: 20px;
+      background-color: #f4f4f4;
       text-align: center;
-    }
-    h1 {
-      color: #2c3e50;
+      padding: 20px;
     }
     form {
-      margin-top: 30px;
-      display: inline-block;
-      text-align: left;
       background: white;
+      display: inline-block;
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    label {
-      font-weight: bold;
-    }
-    textarea, input[type="number"] {
+    input, textarea {
       width: 100%;
       padding: 10px;
-      margin-bottom: 15px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
+      margin: 10px 0;
     }
     button {
       padding: 10px 20px;
-      background-color: #27ae60;
+      background-color: #2ecc71;
       color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
     }
+    button:hover {
+      background-color: #27ae60;
+    }
     #result {
-      margin-top: 30px;
-      font-size: 18px;
+      margin-top: 20px;
       font-weight: bold;
-      color: #34495e;
+      white-space: pre-line;
+    }
+    img {
+      margin-top: 20px;
+      max-width: 100%;
     }
   </style>
 </head>
 <body>
-  <h1>Smart Resource Management: Deadlock Prevention & Detection</h1>
+  <h1>Smart Resource Management</h1>
   <form id="resourceForm">
-    <label for="processes">Number of Processes:</label>
-    <input type="number" id="processes" name="processes" required>
+    <label>Total Resources (space-separated):</label>
+    <textarea id="resource_totals" placeholder="Example: 3 2"></textarea>
 
-    <label for="resources">Number of Resources:</label>
-    <input type="number" id="resources" name="resources" required>
+    <label>Allocation Matrix (comma-separated rows):</label>
+    <textarea id="allocation" placeholder="Example: 1 0, 0 1"></textarea>
 
-    <label for="allocation">Allocation Matrix (comma-separated rows):</label>
-    <textarea id="allocation" rows="4" placeholder="Example: 1 0, 0 1"></textarea>
-
-    <label for="maximum">Maximum Matrix (comma-separated rows):</label>
-    <textarea id="maximum" rows="4" placeholder="Example: 3 2, 1 2"></textarea>
-
-    <label for="available">Available Resources (space-separated):</label>
-    <textarea id="available" rows="1" placeholder="Example: 3 2"></textarea>
+    <label>Maximum Matrix (comma-separated rows):</label>
+    <textarea id="maximum" placeholder="Example: 3 2, 1 2"></textarea>
 
     <button type="submit">Check Deadlock</button>
   </form>
-
   <div id="result"></div>
 
   <script>
     const form = document.getElementById("resourceForm");
     form.addEventListener("submit", async function(e) {
       e.preventDefault();
-
+  
+      document.getElementById("result").textContent = "";
+  
+      const resource_totals = document.getElementById("resource_totals").value.trim().split(" ").map(Number);
+      const allocation = document.getElementById("allocation").value.trim().split(",").map(row => row.trim().split(" ").map(Number));
+      const maximum = document.getElementById("maximum").value.trim().split(",").map(row => row.trim().split(" ").map(Number));
+  
       const data = {
-        processes: parseInt(document.getElementById("processes").value),
-        resources: parseInt(document.getElementById("resources").value),
-        allocation: document.getElementById("allocation").value.trim().split(',').map(row => row.trim().split(' ').map(Number)),
-        maximum: document.getElementById("maximum").value.trim().split(',').map(row => row.trim().split(' ').map(Number)),
-        available: document.getElementById("available").value.trim().split(' ').map(Number)
+        resource_totals,
+        allocation,
+        maximum
       };
-
+  
       try {
         const response = await fetch("/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data)
         });
+  
         const result = await response.json();
-        document.getElementById("result").textContent = result.message;
-      } catch (error) {
-        document.getElementById("result").textContent = "Error connecting to backend.";
+        let output = result.message;
+        if (result.deadlocked_processes && result.deadlocked_processes.length > 0) {
+          output += `\nDeadlocked: ${result.deadlocked_processes.join(", ")}`;
+        }
+        document.getElementById("result").textContent = output;
+  
+        // Load graph image
+        if (result.graph_url) {
+          const img = document.createElement("img");
+          img.src = result.graph_url + "?t=" + new Date().getTime(); // prevent caching
+          img.alt = "Wait-For Graph";
+          document.getElementById("result").appendChild(img);
+        }
+      } catch (err) {
+        document.getElementById("result").textContent = "Error: " + err.message;
       }
     });
-  </script>
+  </script>  
 </body>
 </html>
