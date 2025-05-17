@@ -1,29 +1,21 @@
-class Process:
-    def __init__(self, pid: int, max_resources: list[int]):
-        """
-        Initializes a process with its unique process ID and maximum resources it needs.
-        """
-        self.pid = pid
-        self.max = max_resources.copy()  # Max resources needed by the process
-        self.allocation = [0] * len(max_resources)  # Initially no resources allocated
-        self.need = self.max.copy()  # Initially the need is the same as max resources
-        self.requested = [0] * len(max_resources)  # Initially no resources requested
-        self.status = "ready"  # status: ready/waiting/terminated
+from typing import List
 
-    def allocate(self, resources: list[int]):
-        """
-        Allocates resources to this process.
-        """
+class Process:
+    def __init__(self, pid: int, max_resources: List[int]):
+        self.pid = pid
+        self.max = max_resources.copy()
+        self.allocation = [0] * len(max_resources)
+        self.need = self.max.copy()
+        self.status = "ready"
+        self.requested = [0] * len(max_resources)  # Track current requests
+
+    def allocate(self, resources: List[int]):
         for i in range(len(resources)):
             self.allocation[i] += resources[i]
             self.need[i] -= resources[i]
 
-    def request(self, resources: list[int]):
-        """
-        Request resources for the process.
-        """
+    def request(self, resources: List[int]):
         self.requested = resources.copy()
-        
+
     def __str__(self):
-        """For printing the process"""
-        return f"P{self.pid} | Alloc: {self.allocation} | Need: {self.need} | Req: {self.requested}"
+        return f"P{self.pid} | Max: {self.max} | Alloc: {self.allocation} | Need: {self.need} | Requested: {self.requested}"
