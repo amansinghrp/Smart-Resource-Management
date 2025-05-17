@@ -1,21 +1,19 @@
-import os
-from flask import Flask, request, jsonify, render_template, send_from_directory
 import matplotlib
-matplotlib.use('Agg')  # Use non-GUI backend for Matplotlib
+matplotlib.use('Agg')
+
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import matplotlib.pyplot as plt
 import networkx as nx
-
+import os
 from system.system import System
 from system.wfg import WFG
 
 app = Flask(__name__)
 STATIC_FOLDER = os.path.join(os.path.dirname(__file__), 'static')
 
-
 @app.route('/')
 def home():
     return render_template('index.html')
-
 
 @app.route('/check', methods=['POST'])
 def check_deadlock():
@@ -26,10 +24,11 @@ def check_deadlock():
         max_needs = data['maximum']
         allocations = data['allocation']
 
-        print(f"Received request with {num_processes} processes")
-        print(f"Total resources: {resource_totals}")
-        print(f"Max needs: {max_needs}")
-        print(f"Allocations: {allocations}")
+        print("🔍 Received Data:")
+        print("Processes:", num_processes)
+        print("Resource Totals:", resource_totals)
+        print("Max Needs:", max_needs)
+        print("Allocations:", allocations)
 
         system = System(resource_totals)
 
@@ -39,59 +38,67 @@ def check_deadlock():
         for i, alloc in enumerate(allocations):
             system.processes[i].allocate(alloc)
             for j in range(len(alloc)):
-                # Update system resources allocation
                 system.resources[j].allocate(alloc[j])
                 system.available[j] -= alloc[j]
-
-        print(f"System available after allocations: {system.available}")
-        for p in system.processes:
-            print(f"Process {p.pid} allocation: {p.allocation}, need: {p.need}, status: {p.status}")
 
         is_safe = system.is_safe()
         deadlocked = []
 
+        wfg = WFG(system)
+        wfg.build_graph()
         if not is_safe:
-            print("System is NOT in safe state, building Wait-For Graph...")
-            wfg = WFG(system)
-            wfg.build_graph()
-
-            print("Wait-For Graph adjacency list:")
-            for pid, neighbors in wfg.graph.items():
-                print(f"P{pid} -> {[f'P{n}' for n in neighbors]}")
-
             deadlocked = wfg.detect_deadlock()
-            print(f"Deadlocked processes detected: {deadlocked}")
-
-            # Build graph visualization
-            G = nx.DiGraph()
-            for pid, targets in wfg.graph.items():
-                for target in targets:
-                    G.add_edge(f"P{pid}", f"P{target}")
-
-            plt.figure(figsize=(6, 4))
-            pos = nx.spring_layout(G)
-            nx.draw(G, pos, with_labels=True, node_color='salmon', edge_color='gray', node_size=2000)
-            plt.title("Wait-For Graph")
-            plt.savefig(os.path.join(STATIC_FOLDER, "graph.png"))
-            plt.close()
         else:
-            print("System is in safe state. No deadlock.")
+            print("✅ No deadlock detected.")
+
+        # Generate Resource Allocation Graph (RAG)
+        G = nx.DiGraph()
+
+        # Add resource and process nodes
+        for i in range(len(system.resources)):
+            G.add_node(f"R{i}", shape='s', color='lightblue')
+
+        for p in system.processes:
+            G.add_node(f"P{p.pid}", shape='o', color='lightgreen')
+
+        # Add allocation edges (R -> P)
+        for p in system.processes:
+            for r in range(len(p.allocation)):
+                if p.allocation[r] > 0:
+                    color = 'red' if (not is_safe and p.pid in deadlocked) else 'green'
+                    G.add_edge(f"R{r}", f"P{p.pid}", label='alloc', color=color)
+
+        # Add request edges (P -> R)
+        for p in system.processes:
+            for r in range(len(p.need)):
+                if p.need[r] > 0:
+                    G.add_edge(f"P{p.pid}", f"R{r}", label='req', color='blue')
+
+        # Draw graph
+        pos = nx.spring_layout(G)
+        edge_labels = nx.get_edge_attributes(G, 'label')
+        edge_colors = [G[u][v]['color'] for u, v in G.edges()]
+
+        plt.figure(figsize=(8, 6))
+        nx.draw(G, pos, with_labels=True, node_color='lightgray', node_size=2000, edge_color=edge_colors, width=2, font_size=10)
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        plt.title("Resource Allocation Graph" if is_safe else "Deadlock Detected in RAG")
+        plt.savefig(os.path.join(STATIC_FOLDER, "graph.png"))
+        plt.close()
 
         return jsonify({
             "message": "⚠️ Deadlock detected!" if not is_safe else "✅ No deadlock detected.",
             "deadlocked_processes": [f"P{pid}" for pid in deadlocked],
-            "graph_url": "/graph" if not is_safe else None
+            "graph_url": "/graph"
         })
 
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print("❌ Error:", str(e))
         return jsonify({"message": f"Error: {str(e)}"})
-
 
 @app.route('/graph')
 def get_graph():
     return send_from_directory(STATIC_FOLDER, "graph.png")
-
 
 if __name__ == '__main__':
     app.run(debug=True)
