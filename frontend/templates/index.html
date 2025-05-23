@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Resource Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f8f8f8; padding: 20px; }
+        .container { background: #fff; padding: 30px; border-radius: 10px; max-width: 800px; margin: auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        textarea, input, button { width: 100%; margin: 10px 0; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #28a745; color: white; border: none; cursor: pointer; }
+        button:hover { background: #218838; }
+        h1 { text-align: center; }
+        .result { text-align: center; font-size: 1.2em; margin-top: 20px; }
+        img { display: block; margin: 20px auto; max-width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Smart Resource Management</h1>
+        <input type="number" id="num" placeholder="Number of Processes:" />
+        <textarea id="total" placeholder="Total Resources (space-separated)"></textarea>
+        <textarea id="alloc" placeholder="Allocation Matrix (comma-separated rows)"></textarea>
+        <textarea id="max" placeholder="Maximum Matrix (comma-separated rows)"></textarea>
+        <button onclick="checkDeadlock()">Check Deadlock</button>
+        <div class="result" id="output"></div>
+        <img id="graphImg" style="display:none;" alt="Wait For Graph" />
+    </div>
+    <script>
+        async function checkDeadlock() {
+            const num_processes = parseInt(document.getElementById('num').value);
+            const total = document.getElementById('total').value.trim().split(' ').map(Number);
+            const alloc = document.getElementById('alloc').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
+            const max = document.getElementById('max').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
+
+            const res = await fetch('/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ num_processes, resource_totals: total, allocation: alloc, maximum: max })
+            });
+
+            const data = await res.json();
+            document.getElementById('output').textContent = data.message;
+
+            if (data.graph_url) {
+                const img = document.getElementById('graphImg');
+                img.src = data.graph_url + '?t=' + new Date().getTime();
+                img.style.display = 'block';
+            } else {
+                document.getElementById('graphImg').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
