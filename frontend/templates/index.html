@@ -40,8 +40,24 @@
             });
 
             const data = await res.json();
-            document.getElementById('output').textContent = data.message;
 
+            // Show main message
+            let outputText = data.message;
+
+            // If safe sequence present, display it
+            if (data.safe_sequence && data.safe_sequence.length > 0) {
+                outputText += "\nSafe sequence: " + data.safe_sequence.join(" → ");
+            }
+
+            // If deadlock, show deadlocked processes
+            if (data.deadlocked_processes && data.deadlocked_processes.length > 0) {
+                outputText += "\nDeadlocked processes: " + data.deadlocked_processes.join(", ");
+            }
+
+            // Set output with line breaks
+            document.getElementById('output').innerText = outputText;
+
+            // Show graph if available
             if (data.graph_url) {
                 const img = document.getElementById('graphImg');
                 img.src = data.graph_url + '?t=' + new Date().getTime();

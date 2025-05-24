@@ -41,8 +41,9 @@ def check_deadlock():
                 system.resources[j].allocate(alloc[j])
                 system.available[j] -= alloc[j]
 
-        is_safe = system.is_safe()
+        is_safe, safe_sequence = system.is_safe()
         deadlocked = []
+
 
         wfg = WFG(system)
         wfg.build_graph()
@@ -50,7 +51,6 @@ def check_deadlock():
             deadlocked = wfg.detect_deadlock()
         else:
             print("✅ No deadlock detected.")
-
         # Generate Resource Allocation Graph (RAG)
         G = nx.DiGraph()
 
@@ -89,6 +89,7 @@ def check_deadlock():
         return jsonify({
             "message": "⚠️ Deadlock detected!" if not is_safe else "✅ No deadlock detected.",
             "deadlocked_processes": [f"P{pid}" for pid in deadlocked],
+            "safe_sequence": [f"P{pid}" for pid in safe_sequence] if is_safe else [],
             "graph_url": "/graph"
         })
 

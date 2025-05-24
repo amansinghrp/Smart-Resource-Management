@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from .process import Process
 from .resource import Resource
 from .banker import Banker
@@ -15,13 +15,11 @@ class System:
         self.processes.append(process)
         return pid
 
-    def is_safe(self) -> bool:
+    def is_safe(self) -> Tuple[bool, List[int]]:
         banker = Banker(
             available=self.available[:],
             max_need=[p.max for p in self.processes],
             allocated=[p.allocation for p in self.processes]
         )
-        return banker.is_safe_state(
-            self.available[:],
-            [p.allocation[:] for p in self.processes]
-        )
+        return banker.is_safe_state()
+
