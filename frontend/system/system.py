@@ -22,4 +22,3 @@ class System:
             allocated=[p.allocation for p in self.processes]
         )
         return banker.is_safe_state()
-

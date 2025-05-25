@@ -16,6 +16,25 @@ class WFG:
                     for p2 in self.system.processes:
                         if p2.allocation[rid] > 0:
                             self.graph.setdefault(p1.pid, set()).add(p2.pid)
+    def find_all_cycles(self) -> List[List[int]]:
+        """Finds all cycles in the WFG using DFS."""
+        visited = set()
+        cycles = []
+
+        def dfs(node, path):
+            if node in path:
+                cycle = path[path.index(node):]
+                cycles.append(cycle)
+                return
+            if node in visited:
+                return
+            visited.add(node)
+            for neighbor in self.graph.get(node, []):
+                dfs(neighbor, path + [node])
+
+        for node in self.graph:
+            dfs(node, [])
+        return cycles
 
     def detect_deadlock(self) -> List[int]:
         visited = set()
@@ -40,3 +59,19 @@ class WFG:
                 break
 
         return deadlocked
+    
+    def recommend_process_to_terminate(self):
+        cycles = self.find_all_cycles()  # You'll need to implement cycle detection
+        if not cycles:
+            return None
+        
+        # Flatten all cycles and count process dependencies
+        process_dependencies = {}
+        for cycle in cycles:
+            for p in cycle:
+                process_dependencies[p] = process_dependencies.get(p, 0) + 1
+        
+        # Find the process that appears in most cycles (most "central" to deadlock)
+        termination_candidate = max(process_dependencies.items(), key=lambda x: x[1])[0]
+        
+        return termination_candidate
