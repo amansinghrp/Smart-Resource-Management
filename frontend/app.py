@@ -23,30 +23,38 @@ def check_deadlock():
         resource_totals = data['resource_totals']
         max_needs = data['maximum']
         allocations = data['allocation']
+        terminated_processes = data.get('terminated_processes', [])
 
         print("🔍 Received Data:")
         print("Processes:", num_processes)
         print("Resource Totals:", resource_totals)
         print("Max Needs:", max_needs)
         print("Allocations:", allocations)
+        print("Terminated Processes:", terminated_processes)
 
         # Initialize system
         system = System(resource_totals)
 
-        # Add processes and allocations
-        for max_need in max_needs:
-            system.add_process(max_need)
+        # Add processes and allocations (skip terminated ones)
+        for i, max_need in enumerate(max_needs):
+            if i not in terminated_processes:
+                system.add_process(max_need)
 
+        # Apply allocations (only for non-terminated processes)
+        active_process_index = 0
         for i, alloc in enumerate(allocations):
-            system.processes[i].allocate(alloc)
-            for j in range(len(alloc)):
-                system.resources[j].allocate(alloc[j])
-                system.available[j] -= alloc[j]
+            if i not in terminated_processes:
+                system.processes[active_process_index].allocate(alloc)
+                for j in range(len(alloc)):
+                    system.resources[j].allocate(alloc[j])
+                    system.available[j] -= alloc[j]
+                active_process_index += 1
 
         # Check safety using Banker's algorithm
         is_safe, safe_sequence = system.is_safe()
         deadlocked = []
         termination_recommendation = None
+        termination_pid = None
 
         # If unsafe, detect deadlock using WFG
         if not is_safe:
@@ -54,15 +62,16 @@ def check_deadlock():
             wfg.build_graph()
             deadlocked = wfg.detect_deadlock()
             termination_pid = wfg.recommend_process_to_terminate()
-            termination_recommendation = (
-                f"Terminate P{termination_pid} to break circular wait. "
-                f"This process holds resources: {system.processes[termination_pid].allocation}"
-            )
+            if termination_pid is not None:
+                termination_recommendation = (
+                    f"Terminate P{termination_pid} to break circular wait. "
+                    f"This process holds resources: {system.processes[termination_pid].allocation}"
+                )
 
         # Generate Resource Allocation Graph
         G = nx.DiGraph()
 
-        # Add nodes
+        # Add nodes (only active processes)
         for i in range(len(system.resources)):
             G.add_node(f"R{i}", shape='s', color='lightblue')
 
@@ -81,7 +90,6 @@ def check_deadlock():
                 if p.need[r] > 0:
                     edge_color = 'darkred' if not is_safe and p.pid in deadlocked else 'blue'
                     G.add_edge(f"P{p.pid}", f"R{r}", label='req', color=edge_color)
-
         # Draw graph
         pos = nx.spring_layout(G)
         plt.figure(figsize=(10, 8))
@@ -93,8 +101,11 @@ def check_deadlock():
                 node_colors.append('lightblue')
             else:
                 pid = int(node[1:])
-                if not is_safe and pid in deadlocked:
-                    node_colors.append('red' if pid == termination_pid else 'orange')
+                if not is_safe:
+                    if deadlocked and pid in deadlocked:
+                        node_colors.append('red' if 'termination_pid' in locals() and pid == termination_pid else 'orange')
+                    else:
+                        node_colors.append('lightgreen')
                 else:
                     node_colors.append('lightgreen')
 
