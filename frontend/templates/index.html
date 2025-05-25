@@ -3,29 +3,42 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Smart Resource Management</title>
+    <title>Smart Resource Management System</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f8f8f8; padding: 20px; }
         .container { background: #fff; padding: 30px; border-radius: 10px; max-width: 800px; margin: auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         textarea, input, button { width: 100%; margin: 10px 0; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
-        button { background: #28a745; color: white; border: none; cursor: pointer; }
+        button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background: #218838; }
-        h1 { text-align: center; }
-        .result { text-align: center; font-size: 1.2em; margin-top: 20px; }
-        img { display: block; margin: 20px auto; max-width: 100%; height: auto; }
+        h1 { text-align: center; color: #333; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .safe { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .deadlock { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        img { display: block; margin: 20px auto; max-width: 100%; height: auto; border: 1px solid #ddd; }
+        .recommendation { 
+            background-color: #fff3cd; 
+            color: #856404; 
+            padding: 10px; 
+            margin-top: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #ffeeba;
+        }
+        .process-list { margin: 5px 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Smart Resource Management</h1>
+        <h1>Smart Resource Management System</h1>
         <input type="number" id="num" placeholder="Number of Processes:" />
-        <textarea id="total" placeholder="Total Resources (space-separated)"></textarea>
-        <textarea id="alloc" placeholder="Allocation Matrix (comma-separated rows)"></textarea>
-        <textarea id="max" placeholder="Maximum Matrix (comma-separated rows)"></textarea>
-        <button onclick="checkDeadlock()">Check Deadlock</button>
-        <div class="result" id="output"></div>
-        <img id="graphImg" style="display:none;" alt="Wait For Graph" />
+        <textarea id="total" placeholder="Total Resources (space-separated) e.g.: 3 4 2"></textarea>
+        <textarea id="alloc" placeholder="Allocation Matrix (comma-separated rows) e.g.: 1 0 0, 2 1 0"></textarea>
+        <textarea id="max" placeholder="Maximum Matrix (comma-separated rows) e.g.: 3 3 2, 4 2 1"></textarea>
+        <button onclick="checkDeadlock()">Analyze System State</button>
+        
+        <div id="output" class="result" style="display:none;"></div>
+        <img id="graphImg" style="display:none;" alt="Resource Allocation Graph" />
     </div>
+
     <script>
         async function checkDeadlock() {
             const num_processes = parseInt(document.getElementById('num').value);
@@ -33,21 +46,56 @@
             const alloc = document.getElementById('alloc').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
             const max = document.getElementById('max').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
 
-            const res = await fetch('/check', {
+            const response = await fetch('/check', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ num_processes, resource_totals: total, allocation: alloc, maximum: max })
+                body: JSON.stringify({ 
+                    num_processes: num_processes, 
+                    resource_totals: total, 
+                    allocation: alloc, 
+                    maximum: max 
+                })
             });
 
-            const data = await res.json();
-            document.getElementById('output').textContent = data.message;
+            const data = await response.json();
+            const outputDiv = document.getElementById('output');
+            outputDiv.style.display = 'block';
 
-            if (data.graph_url) {
-                const img = document.getElementById('graphImg');
-                img.src = data.graph_url + '?t=' + new Date().getTime();
-                img.style.display = 'block';
+            // Clear previous classes
+            outputDiv.className = 'result';
+            outputDiv.innerHTML = '';
+
+            // Set status-specific styling
+            if (data.status === 'safe') {
+                outputDiv.classList.add('safe');
+                outputDiv.innerHTML = `
+                    <h3>✅ System is Safe</h3>
+                    <div class="process-list">
+                        <strong>Safe Execution Sequence:</strong> ${data.safe_sequence.join(" → ")}
+                    </div>
+                `;
+            } else if (data.status === 'deadlock') {
+                outputDiv.classList.add('deadlock');
+                outputDiv.innerHTML = `
+                    <h3>⚠️ Deadlock Detected</h3>
+                    <div class="process-list">
+                        <strong>Deadlocked Processes:</strong> ${data.deadlocked_processes.join(", ")}
+                    </div>
+                    <div class="recommendation">
+                        <strong>Recommended Action:</strong> ${data.termination_recommendation}
+                    </div>
+                `;
             } else {
-                document.getElementById('graphImg').style.display = 'none';
+                outputDiv.innerHTML = `<p>Error: ${data.message}</p>`;
+            }
+
+            // Display graph if available
+            const graphImg = document.getElementById('graphImg');
+            if (data.graph_url) {
+                graphImg.src = data.graph_url + '?t=' + new Date().getTime();
+                graphImg.style.display = 'block';
+            } else {
+                graphImg.style.display = 'none';
             }
         }
     </script>
