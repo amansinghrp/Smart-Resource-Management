@@ -41,7 +41,7 @@ class Banker:
         # Step 3: Pretend to allocate the requested resources
         # Temporarily modify available and allocation
         temp_available = self.available[:]
-        temp_allocated = [row[:] for row in self.allocated]  # Create a deep copy
+        temp_allocated = [row[:] for row in self.allocated]  # Create a copy
         temp_available = [temp_available[i] - request[i] for i in range(self.resource_count)]
         temp_allocated[pid] = [temp_allocated[pid][i] + request[i] for i in range(self.resource_count)]
         
