@@ -120,7 +120,7 @@ def check_deadlock():
         # compute layout
         pos = nx.spring_layout(G)
 
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(10, 5))
 
         # draw nodes and labels
         nx.draw_networkx_nodes(G, pos,

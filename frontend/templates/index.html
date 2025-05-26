@@ -111,9 +111,10 @@
         <button onclick="checkDeadlock()">Analyze System State</button>
         <button id="terminateBtn" onclick="terminateProcess()" style="background: #dc3545; display: none;">Termination
             Process</button>
-
-        <div id="output" class="result" style="display:none;"></div>
-        <img id="graphImg" style="display:none;" alt="Resource Allocation Graph" />
+        <div id="show">
+            <div id="output" class="result" style="display:none;"></div>
+            <img id="graphImg" style="display:none;" alt="Resource Allocation Graph" />
+        </div>
     </div>
 
     <script>
@@ -225,6 +226,7 @@
         }
 
         function displayResults(data) {
+            const showDiv = document.getElementById('show');
             const outputDiv = document.getElementById('output');
             const terminateBtn = document.getElementById('terminateBtn');
             outputDiv.style.display = 'block';
@@ -264,6 +266,7 @@
             } else {
                 graphImg.style.display = 'none';
             }
+            showDiv.scrollIntoView({ behavior: 'smooth' });
         }
     </script>
 </body>
