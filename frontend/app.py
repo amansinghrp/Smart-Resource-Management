@@ -35,43 +35,38 @@ def check_deadlock():
         # Initialize system
         system = System(resource_totals)
 
-        # Add processes and allocations (skip terminated ones)
-        for i, max_need in enumerate(max_needs):
+        # Add processes and their allocations (skipping terminated ones)
+        for i, (max_need, alloc) in enumerate(zip(max_needs, allocations)):
             if i not in terminated_processes:
-                system.add_process(max_need)
-
-        # Apply allocations (only for non-terminated processes)
-        active_process_index = 0
-        for i, alloc in enumerate(allocations):
-            if i not in terminated_processes:
-                system.processes[active_process_index].allocate(alloc)
-                for j in range(len(alloc)):
-                    system.resources[j].allocate(alloc[j])
-                    system.available[j] -= alloc[j]
-                active_process_index += 1
+                system.add_process(i, max_need, alloc)
 
         # Check safety using Banker's algorithm
-        is_safe, safe_sequence = system.is_safe()
+        is_safe, safe_sequence = system.is_safe(terminated_processes)
+
         deadlocked = []
         termination_recommendation = None
         termination_pid = None
 
-        # If unsafe, detect deadlock using WFG
         if not is_safe:
             wfg = WFG(system)
             wfg.build_graph()
             deadlocked = wfg.detect_deadlock()
             termination_pid = wfg.recommend_process_to_terminate()
             if termination_pid is not None:
-                termination_recommendation = (
-                    f"Terminate P{termination_pid} to break circular wait. "
-                    f"This process holds resources: {system.processes[termination_pid].allocation}"
-                )
+                process_index = next((i for i, p in enumerate(system.processes) if p.pid == termination_pid), None)
+                if process_index is not None:
+                    held_resources = system.processes[process_index].allocation
+                    termination_recommendation = (
+                        f"Terminate P{termination_pid} to break circular wait. "
+                        f"This process holds resources: {held_resources}"
+                    )
+            else:
+                termination_recommendation = "No further termination recommendation available. Deadlock may persist or system is unrecoverable."
+
 
         # Generate Resource Allocation Graph
         G = nx.DiGraph()
 
-        # Add nodes (only active processes)
         for i in range(len(system.resources)):
             G.add_node(f"R{i}", shape='s', color='lightblue')
 
@@ -79,7 +74,6 @@ def check_deadlock():
             node_color = 'red' if not is_safe and p.pid in deadlocked else 'lightgreen'
             G.add_node(f"P{p.pid}", shape='o', color=node_color)
 
-        # Add edges
         for p in system.processes:
             for r in range(len(p.allocation)):
                 if p.allocation[r] > 0:
@@ -90,11 +84,10 @@ def check_deadlock():
                 if p.need[r] > 0:
                     edge_color = 'darkred' if not is_safe and p.pid in deadlocked else 'blue'
                     G.add_edge(f"P{p.pid}", f"R{r}", label='req', color=edge_color)
-        # Draw graph
+
         pos = nx.spring_layout(G)
         plt.figure(figsize=(10, 8))
-        
-        # Color nodes
+
         node_colors = []
         for node in G.nodes():
             if node.startswith('R'):
@@ -103,7 +96,7 @@ def check_deadlock():
                 pid = int(node[1:])
                 if not is_safe:
                     if deadlocked and pid in deadlocked:
-                        node_colors.append('red' if 'termination_pid' in locals() and pid == termination_pid else 'orange')
+                        node_colors.append('red' if pid == termination_pid else 'orange')
                     else:
                         node_colors.append('lightgreen')
                 else:
@@ -115,7 +108,7 @@ def check_deadlock():
         nx.draw(G, pos, with_labels=True, node_color=node_colors, 
                node_size=2000, edge_color=edge_colors, width=2, font_size=10)
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-        
+
         title = "Resource Allocation Graph (Safe State)" if is_safe else "Deadlock Detected"
         plt.title(title)
         plt.savefig(os.path.join(STATIC_FOLDER, "graph.png"))
