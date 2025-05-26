@@ -41,100 +41,91 @@
     </div>
 
     <script>
-        let currentSystemState = null;
+    let currentSystemState = null;
 
-        async function checkDeadlock() {
-            const num_processes = parseInt(document.getElementById('num').value);
-            const total = document.getElementById('total').value.trim().split(' ').map(Number);
-            const alloc = document.getElementById('alloc').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
-            const max = document.getElementById('max').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
+    async function checkDeadlock() {
+        const num_processes = parseInt(document.getElementById('num').value);
+        const total = document.getElementById('total').value.trim().split(' ').map(Number);
+        const alloc = document.getElementById('alloc').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
+        const max = document.getElementById('max').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
 
-            currentSystemState = {
-                num_processes: num_processes,
-                resource_totals: total,
-                allocation: alloc,
-                maximum: max,
-                terminated_processes: []
-            };
+        currentSystemState = {
+            num_processes: num_processes,
+            resource_totals: total,
+            allocation: alloc,
+            maximum: max,
+            terminated_processes: []
+        };
 
-            const response = await analyzeSystem(currentSystemState);
-            displayResults(response);
+        const response = await analyzeSystem(currentSystemState);
+        displayResults(response);
+    }
+
+    async function terminateProcess() {
+        if (!currentSystemState) return;
+
+        const recommendationText = document.querySelector('.recommendation strong').nextSibling.textContent.trim();
+        const pid = parseInt(recommendationText.match(/P(\d+)/)[1]);
+
+        currentSystemState.terminated_processes.push(pid);
+
+        // Do NOT remove process from allocation or maximum
+        // Let backend skip based on `terminated_processes`
+        const response = await analyzeSystem(currentSystemState);
+        displayResults(response);
+    }
+
+    async function analyzeSystem(systemState) {
+        const response = await fetch('/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(systemState)
+        });
+        return await response.json();
+    }
+
+    function displayResults(data) {
+        const outputDiv = document.getElementById('output');
+        const terminateBtn = document.getElementById('terminateBtn');
+        outputDiv.style.display = 'block';
+        outputDiv.className = 'result';
+        outputDiv.innerHTML = '';
+
+        if (data.status === 'safe') {
+            outputDiv.classList.add('safe');
+            outputDiv.innerHTML = `
+                <h3>✅ System is Safe</h3>
+                <div class="process-list">
+                    <strong>Safe Execution Sequence:</strong> ${data.safe_sequence.join(" → ")}
+                </div>
+            `;
+            terminateBtn.style.display = 'none';
+        } else if (data.status === 'deadlock') {
+            outputDiv.classList.add('deadlock');
+            outputDiv.innerHTML = `
+                <h3>⚠️ Deadlock Detected</h3>
+                <div class="process-list">
+                    <strong>Deadlocked Processes:</strong> ${data.deadlocked_processes.join(", ")}
+                </div>
+                <div class="recommendation">
+                    <strong>Recommended Action:</strong> ${data.termination_recommendation}
+                </div>
+            `;
+            terminateBtn.style.display = 'block';
+        } else {
+            outputDiv.innerHTML = `<p>Error: ${data.message}</p>`;
+            terminateBtn.style.display = 'none';
         }
 
-        async function terminateProcess() {
-            if (!currentSystemState) return;
-
-            // Get the recommended process to terminate from the UI
-            const recommendationText = document.querySelector('.recommendation strong').nextSibling.textContent.trim();
-            const pid = parseInt(recommendationText.match(/P(\d+)/)[1]);
-
-            // Update the system state
-            currentSystemState.terminated_processes.push(pid);
-            currentSystemState.num_processes -= 1;
-
-            // Remove the terminated process from allocation and maximum matrices
-            currentSystemState.allocation.splice(pid, 1);
-            currentSystemState.maximum.splice(pid, 1);
-
-            // Recalculate available resources (add back the terminated process's allocations)
-            const alloc = currentSystemState.allocation.flat();
-            const total = currentSystemState.resource_totals;
-            currentSystemState.available = total.map((t, i) => t - alloc.reduce((sum, a, j) => sum + (j % total.length === i ? a : 0), 0));
-
-            const response = await analyzeSystem(currentSystemState);
-            displayResults(response);
+        const graphImg = document.getElementById('graphImg');
+        if (data.graph_url) {
+            graphImg.src = data.graph_url + '?t=' + new Date().getTime();
+            graphImg.style.display = 'block';
+        } else {
+            graphImg.style.display = 'none';
         }
+    }
+</script>
 
-        async function analyzeSystem(systemState) {
-            const response = await fetch('/check', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(systemState)
-            });
-            return await response.json();
-        }
-
-        function displayResults(data) {
-            const outputDiv = document.getElementById('output');
-            const terminateBtn = document.getElementById('terminateBtn');
-            outputDiv.style.display = 'block';
-            outputDiv.className = 'result';
-            outputDiv.innerHTML = '';
-
-            if (data.status === 'safe') {
-                outputDiv.classList.add('safe');
-                outputDiv.innerHTML = `
-                    <h3>✅ System is Safe</h3>
-                    <div class="process-list">
-                        <strong>Safe Execution Sequence:</strong> ${data.safe_sequence.join(" → ")}
-                    </div>
-                `;
-                terminateBtn.style.display = 'none';
-            } else if (data.status === 'deadlock') {
-                outputDiv.classList.add('deadlock');
-                outputDiv.innerHTML = `
-                    <h3>⚠️ Deadlock Detected</h3>
-                    <div class="process-list">
-                        <strong>Deadlocked Processes:</strong> ${data.deadlocked_processes.join(", ")}
-                    </div>
-                    <div class="recommendation">
-                        <strong>Recommended Action:</strong> ${data.termination_recommendation}
-                    </div>
-                `;
-                terminateBtn.style.display = 'block';
-            } else {
-                outputDiv.innerHTML = `<p>Error: ${data.message}</p>`;
-                terminateBtn.style.display = 'none';
-            }
-
-            const graphImg = document.getElementById('graphImg');
-            if (data.graph_url) {
-                graphImg.src = data.graph_url + '?t=' + new Date().getTime();
-                graphImg.style.display = 'block';
-            } else {
-                graphImg.style.display = 'none';
-            }
-        }
-    </script>
 </body>
 </html>

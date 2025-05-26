@@ -9,16 +9,40 @@ class System:
         self.processes: List[Process] = []
         self.available = resource_totals.copy()
 
-    def add_process(self, max_needs: List[int]) -> int:
-        pid = len(self.processes)
+    def add_process(self, pid: int, max_needs: List[int], allocation: List[int]):
         process = Process(pid, max_needs)
+        process.allocate(allocation)
+        for j in range(len(allocation)):
+            self.resources[j].allocate(allocation[j])
+            self.available[j] -= allocation[j]
         self.processes.append(process)
-        return pid
 
-    def is_safe(self) -> Tuple[bool, List[int]]:
+    def is_safe(self, terminated_processes: List[int] = []) -> Tuple[bool, List[int]]:
+        # Filter out terminated processes
+        filtered_max_need = []
+        filtered_allocation = []
+        filtered_available = self.available[:]
+        active_process_ids = []
+
+        for i, p in enumerate(self.processes):
+            if p.pid in terminated_processes:
+                # Add the terminated process's allocation back to available resources
+                for j in range(len(p.allocation)):
+                    filtered_available[j] += p.allocation[j]
+                continue
+
+            filtered_max_need.append(p.max)
+            filtered_allocation.append(p.allocation)
+            active_process_ids.append(p.pid)
+
+        # Run Banker's algorithm on filtered data
         banker = Banker(
-            available=self.available[:],
-            max_need=[p.max for p in self.processes],
-            allocated=[p.allocation for p in self.processes]
+            available=filtered_available,
+            max_need=filtered_max_need,
+            allocated=filtered_allocation
         )
-        return banker.is_safe_state()
+        is_safe, sequence = banker.is_safe_state()
+
+        # Map the safe sequence indices back to actual PIDs
+        actual_sequence = [active_process_ids[i] for i in sequence] if is_safe else []
+        return is_safe, actual_sequence
