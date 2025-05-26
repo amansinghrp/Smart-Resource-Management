@@ -19,30 +19,38 @@ def home():
 def check_deadlock():
     try:
         data = request.get_json()
-        num_processes = data['num_processes']
-        resource_totals = data['resource_totals']
-        max_needs = data['maximum']
-        allocations = data['allocation']
-        terminated_processes = data.get('terminated_processes', [])
+        resource_totals      = data['resource_totals']
+        allocations         = data['allocation']
+        max_needs           = data['maximum']
+        terminated_processes= set(data.get('terminated_processes', []))
 
-        print("🔍 Received Data:")
-        print("Processes:", num_processes)
-        print("Resource Totals:", resource_totals)
-        print("Max Needs:", max_needs)
-        print("Allocations:", allocations)
-        print("Terminated Processes:", terminated_processes)
+        # 1) Validate allocation feasibility before system construction
+        allocated_sums = [0] * len(resource_totals)
+        for alloc in allocations:
+            for r, units in enumerate(alloc):
+                allocated_sums[r] += units
 
-        # Initialize system
+        for r, total in enumerate(resource_totals):
+            if allocated_sums[r] > total:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Invalid allocation: requested {allocated_sums[r]} units for R{r}, but only {total} available."
+                })
+
+        # 2) Now build system safely
         system = System(resource_totals)
-
-        # Add processes and their allocations (skipping terminated ones)
-        for i, (max_need, alloc) in enumerate(zip(max_needs, allocations)):
-            if i not in terminated_processes:
-                system.add_process(i, max_need, alloc)
-
-        # Check safety using Banker's algorithm
-        is_safe, safe_sequence = system.is_safe(terminated_processes)
-
+        for pid, (max_need, alloc) in enumerate(zip(max_needs, allocations)):
+            if pid in terminated_processes:
+                continue
+            system.add_process(pid, max_need, alloc)
+            
+        # 3) Check safety via your Banker wrapper
+        is_safe, safe_seq = system.is_safe(list(terminated_processes))
+        for p in system.processes:
+            if p.pid in terminated_processes:
+                continue
+            p.status = "ready" if p.pid in safe_seq else "waiting"
+            
         deadlocked = []
         termination_recommendation = None
         termination_pid = None
@@ -52,77 +60,105 @@ def check_deadlock():
             wfg.build_graph()
             deadlocked = wfg.detect_deadlock()
             termination_pid = wfg.recommend_process_to_terminate()
-            if termination_pid is not None:
-                process_index = next((i for i, p in enumerate(system.processes) if p.pid == termination_pid), None)
-                if process_index is not None:
-                    held_resources = system.processes[process_index].allocation
-                    termination_recommendation = (
-                        f"Terminate P{termination_pid} to break circular wait. "
-                        f"This process holds resources: {held_resources}"
-                    )
+            if termination_pid is not None and  0 <= termination_pid < len(system.processes):
+                held_resources = system.processes[termination_pid].allocation
+                termination_recommendation = (
+                    f"Terminate P{termination_pid} to break circular wait. "
+                    f"This process holds resources: {held_resources}"
+                )
             else:
                 termination_recommendation = "No further termination recommendation available. Deadlock may persist or system is unrecoverable."
 
 
-        # Generate Resource Allocation Graph
+        # 4) Draw the Resource Allocation Graph
         G = nx.DiGraph()
-
-        for i in range(len(system.resources)):
-            G.add_node(f"R{i}", shape='s', color='lightblue')
-
+        # nodes
+        for res in system.resources:
+            G.add_node(f"R{res.rid}", shape='s')
         for p in system.processes:
-            node_color = 'red' if not is_safe and p.pid in deadlocked else 'lightgreen'
-            G.add_node(f"P{p.pid}", shape='o', color=node_color)
+            if p.pid not in terminated_processes:
+                G.add_node(f"P{p.pid}", shape='o')
 
+        # allocation edges: R -> P
         for p in system.processes:
-            for r in range(len(p.allocation)):
-                if p.allocation[r] > 0:
-                    edge_color = 'darkred' if not is_safe and p.pid in deadlocked else 'green'
-                    G.add_edge(f"R{r}", f"P{p.pid}", label='alloc', color=edge_color)
+            if p.pid in terminated_processes:
+                continue
+            for r, qty in enumerate(p.allocation):
+                if qty > 0:
+                    G.add_edge(
+                        f"R{r}", f"P{p.pid}",
+                        type='alloc',
+                        label='alloc',
+                        color=('darkred' if p.pid in deadlocked else 'green')
+                    )
 
-            for r in range(len(p.need)):
-                if p.need[r] > 0:
-                    edge_color = 'darkred' if not is_safe and p.pid in deadlocked else 'blue'
-                    G.add_edge(f"P{p.pid}", f"R{r}", label='req', color=edge_color)
+        # request edges: P -> R ONLY if waiting & need > available
+        for p in system.processes:
+            if p.pid in terminated_processes or p.status != "waiting":
+                continue
+            for r, need in enumerate(p.need):
+                if need > system.available[r]:
+                    G.add_edge(
+                        f"P{p.pid}", f"R{r}",
+                        type='req',
+                        label='req',
+                        color=('darkred' if p.pid in deadlocked else 'blue')
+                    )
 
-        pos = nx.spring_layout(G)
-        plt.figure(figsize=(10, 8))
-
+        # determine node colors
         node_colors = []
         for node in G.nodes():
             if node.startswith('R'):
                 node_colors.append('lightblue')
             else:
                 pid = int(node[1:])
-                if not is_safe:
-                    if deadlocked and pid in deadlocked:
-                        node_colors.append('red' if pid == termination_pid else 'orange')
-                    else:
-                        node_colors.append('lightgreen')
+                if not is_safe and pid in deadlocked:
+                    node_colors.append('red' if pid == termination_pid else 'orange')
                 else:
                     node_colors.append('lightgreen')
 
-        edge_colors = [G[u][v]['color'] for u, v in G.edges()]
+        # compute layout
+        pos = nx.spring_layout(G)
+
+        plt.figure(figsize=(10, 8))
+
+        # draw nodes and labels
+        nx.draw_networkx_nodes(G, pos,
+                            node_color=node_colors,
+                            node_size=2000)
+        nx.draw_networkx_labels(G, pos,
+                                font_size=10)
+
+        # draw all edges (straight only)
+        edge_colors = [d['color'] for _, _, d in G.edges(data=True)]
+        nx.draw_networkx_edges(G, pos,
+                            edge_color=edge_colors,
+                            arrows=True,
+                            arrowstyle='-|>',
+                            arrowsize=20,
+                            width=2)
+
+        # draw edge labels
         edge_labels = nx.get_edge_attributes(G, 'label')
+        nx.draw_networkx_edge_labels(G, pos,
+                                    edge_labels=edge_labels,
+                                    font_size=9,
+                                    font_color='black',
+                                    label_pos=0.5)
 
-        nx.draw(G, pos, with_labels=True, node_color=node_colors, 
-               node_size=2000, edge_color=edge_colors, width=2, font_size=10)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-
-        title = "Resource Allocation Graph (Safe State)" if is_safe else "Deadlock Detected"
-        plt.title(title)
+        plt.title("Safe State" if is_safe else "Deadlock Detected")
+        plt.axis('off')
         plt.savefig(os.path.join(STATIC_FOLDER, "graph.png"))
         plt.close()
-
+         # 5) Return JSON results to the frontend
         return jsonify({
             "status": "safe" if is_safe else "deadlock",
+            "safe_sequence": [f"P{pid}" for pid in safe_seq] if is_safe else [],
             "message": "✅ System is in safe state" if is_safe else "⚠️ Deadlock detected",
             "deadlocked_processes": [f"P{pid}" for pid in deadlocked],
-            "safe_sequence": [f"P{pid}" for pid in safe_sequence] if is_safe else [],
             "termination_recommendation": termination_recommendation,
             "graph_url": "/graph"
         })
-
     except Exception as e:
         print("❌ Error:", str(e))
         return jsonify({
