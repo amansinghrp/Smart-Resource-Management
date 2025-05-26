@@ -1,108 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Smart Resource Management System</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f8f8f8; padding: 20px; }
-        .container { background: #fff; padding: 30px; border-radius: 10px; max-width: 800px; margin: auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        textarea, input, button { width: 100%; margin: 10px 0; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
-        button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background: #218838; }
-        h1 { text-align: center; color: #333; }
-        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
-        .safe { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .deadlock { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        img { display: block; margin: 20px auto; max-width: 100%; height: auto; border: 1px solid #ddd; }
-        .recommendation { 
-            background-color: #fff3cd; 
-            color: #856404; 
-            padding: 10px; 
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f8f8;
+            padding: 20px;
+        }
+
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 900px;
+            margin: auto;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        input,
+        button {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .matrix-row {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #218838;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .safe {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .deadlock {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        img {
+            display: block;
+            margin: 20px auto;
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+        }
+
+        .recommendation {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
             margin-top: 10px;
             border-radius: 5px;
             border-left: 4px solid #ffeeba;
         }
-        .process-list { margin: 5px 0; }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Smart Resource Management System</h1>
-        <input type="number" id="num" placeholder="Number of Processes:" />
-        <textarea id="total" placeholder="Total Resources (space-separated) e.g.: 3 4 2"></textarea>
-        <textarea id="alloc" placeholder="Allocation Matrix (comma-separated rows) e.g.: 1 0 0, 2 1 0"></textarea>
-        <textarea id="max" placeholder="Maximum Matrix (comma-separated rows) e.g.: 3 3 2, 4 2 1"></textarea>
+
+        <label for="num_processes">Number of Processes:</label>
+        <input type="number" id="num_processes" min="1" />
+
+        <label for="num_resources">Number of Resources:</label>
+        <input type="number" id="num_resources" min="1" />
+
+        <button onclick="generateInputs()">Generate Input Fields</button>
+
+        <div id="dynamicInputs"></div>
         <button onclick="checkDeadlock()">Analyze System State</button>
-        <button id="terminateBtn" onclick="terminateProcess()" style="background: #dc3545; display: none;">Continue with Termination</button>
+        <button id="terminateBtn" onclick="terminateProcess()" style="background: #dc3545; display: none;">Termination
+            Process</button>
 
         <div id="output" class="result" style="display:none;"></div>
         <img id="graphImg" style="display:none;" alt="Resource Allocation Graph" />
     </div>
 
     <script>
-    let currentSystemState = null;
+        let currentSystemState = null;
+        function generateInputs() {
+            const numProc = parseInt(document.getElementById('num_processes').value);
+            const numRes = parseInt(document.getElementById('num_resources').value);
+            const container = document.getElementById('dynamicInputs');
+            container.innerHTML = '';
 
-    async function checkDeadlock() {
-        const num_processes = parseInt(document.getElementById('num').value);
-        const total = document.getElementById('total').value.trim().split(' ').map(Number);
-        const alloc = document.getElementById('alloc').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
-        const max = document.getElementById('max').value.trim().split(',').map(row => row.trim().split(' ').map(Number));
+            // Total Resources
+            const totalLabel = document.createElement('label');
+            totalLabel.textContent = 'Enter Total Resources:';
+            container.appendChild(totalLabel);
+            const totalRow = document.createElement('div');
+            totalRow.className = 'matrix-row';
+            for (let r = 0; r < numRes; r++) {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.min = '0';
+                input.placeholder = `R${r}`;
+                input.className = 'total-resource';
+                totalRow.appendChild(input);
+            }
+            container.appendChild(totalRow);
 
-        currentSystemState = {
-            num_processes: num_processes,
-            resource_totals: total,
-            allocation: alloc,
-            maximum: max,
-            terminated_processes: []
-        };
+            // Allocation Matrix
+            const allocLabel = document.createElement('label');
+            allocLabel.textContent = 'Allocation Matrix:';
+            container.appendChild(allocLabel);
+            for (let p = 0; p < numProc; p++) {
+                const row = document.createElement('div');
+                row.className = 'matrix-row';
+                for (let r = 0; r < numRes; r++) {
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = '0';
+                    input.placeholder = `P${p} R${r}`;
+                    input.className = `alloc-${p}`;
+                    row.appendChild(input);
+                }
+                container.appendChild(row);
+            }
 
-        const response = await analyzeSystem(currentSystemState);
-        displayResults(response);
-    }
+            // Max Needs Matrix
+            const maxLabel = document.createElement('label');
+            maxLabel.textContent = 'Maximum Need Matrix:';
+            container.appendChild(maxLabel);
+            for (let p = 0; p < numProc; p++) {
+                const row = document.createElement('div');
+                row.className = 'matrix-row';
+                for (let r = 0; r < numRes; r++) {
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = '0';
+                    input.placeholder = `P${p} R${r}`;
+                    input.className = `max-${p}`;
+                    row.appendChild(input);
+                }
+                container.appendChild(row);
+            }
+        }
+        async function checkDeadlock() {
+            const numProc = parseInt(document.getElementById('num_processes').value);
+            const total = Array.from(document.querySelectorAll('.total-resource'))
+                .map(input => parseInt(input.value) || 0);
 
-    async function terminateProcess() {
-        if (!currentSystemState) return;
+            const allocation = [];
+            const maximum = [];
 
-        const recommendationText = document.querySelector('.recommendation strong').nextSibling.textContent.trim();
-        const pid = parseInt(recommendationText.match(/P(\d+)/)[1]);
+            for (let p = 0; p < numProc; p++) {
+                const allocRow = Array.from(document.querySelectorAll(`.alloc-${p}`))
+                    .map(input => parseInt(input.value) || 0);
+                const maxRow = Array.from(document.querySelectorAll(`.max-${p}`))
+                    .map(input => parseInt(input.value) || 0);
+                allocation.push(allocRow);
+                maximum.push(maxRow);
+            }
 
-        currentSystemState.terminated_processes.push(pid);
+            currentSystemState = {
+                num_processes: numProc,
+                resource_totals: total,
+                allocation: allocation,
+                maximum: maximum,
+                terminated_processes: []
+            };
 
-        // Do NOT remove process from allocation or maximum
-        // Let backend skip based on `terminated_processes`
-        const response = await analyzeSystem(currentSystemState);
-        displayResults(response);
-    }
+            const response = await analyzeSystem(currentSystemState);
+            displayResults(response);
+        }
 
-    async function analyzeSystem(systemState) {
-        const response = await fetch('/check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(systemState)
-        });
-        return await response.json();
-    }
+        async function terminateProcess() {
+            if (!currentSystemState) return;
+            const text = document.querySelector('.recommendation strong')
+                .nextSibling.textContent;
+            const pid = parseInt(text.match(/P(\d+)/)[1]);
+            currentSystemState.terminated_processes.push(pid);
+            const response = await analyzeSystem(currentSystemState);
+            displayResults(response);
+        }
 
-    function displayResults(data) {
-        const outputDiv = document.getElementById('output');
-        const terminateBtn = document.getElementById('terminateBtn');
-        outputDiv.style.display = 'block';
-        outputDiv.className = 'result';
-        outputDiv.innerHTML = '';
+        async function analyzeSystem(systemState) {
+            const resp = await fetch('/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(systemState)
+            });
+            return resp.json();
+        }
 
-        if (data.status === 'safe') {
-            outputDiv.classList.add('safe');
-            outputDiv.innerHTML = `
+        function displayResults(data) {
+            const outputDiv = document.getElementById('output');
+            const terminateBtn = document.getElementById('terminateBtn');
+            outputDiv.style.display = 'block';
+            outputDiv.className = 'result';
+            outputDiv.innerHTML = '';
+
+            if (data.status === 'safe') {
+                outputDiv.classList.add('safe');
+                outputDiv.innerHTML = `
                 <h3>✅ System is Safe</h3>
                 <div class="process-list">
                     <strong>Safe Execution Sequence:</strong> ${data.safe_sequence.join(" → ")}
                 </div>
             `;
-            terminateBtn.style.display = 'none';
-        } else if (data.status === 'deadlock') {
-            outputDiv.classList.add('deadlock');
-            outputDiv.innerHTML = `
+                terminateBtn.style.display = 'none';
+            } else if (data.status === 'deadlock') {
+                outputDiv.classList.add('deadlock');
+                outputDiv.innerHTML = `
                 <h3>⚠️ Deadlock Detected</h3>
                 <div class="process-list">
                     <strong>Deadlocked Processes:</strong> ${data.deadlocked_processes.join(", ")}
@@ -111,21 +251,21 @@
                     <strong>Recommended Action:</strong> ${data.termination_recommendation}
                 </div>
             `;
-            terminateBtn.style.display = 'block';
-        } else {
-            outputDiv.innerHTML = `<p>Error: ${data.message}</p>`;
-            terminateBtn.style.display = 'none';
-        }
+                terminateBtn.style.display = 'block';
+            } else {
+                outputDiv.innerHTML = `<p>Error: ${data.message}</p>`;
+                terminateBtn.style.display = 'none';
+            }
 
-        const graphImg = document.getElementById('graphImg');
-        if (data.graph_url) {
-            graphImg.src = data.graph_url + '?t=' + new Date().getTime();
-            graphImg.style.display = 'block';
-        } else {
-            graphImg.style.display = 'none';
+            const graphImg = document.getElementById('graphImg');
+            if (data.graph_url) {
+                graphImg.src = data.graph_url + '?t=' + new Date().getTime();
+                graphImg.style.display = 'block';
+            } else {
+                graphImg.style.display = 'none';
+            }
         }
-    }
-</script>
-
+    </script>
 </body>
+
 </html>
